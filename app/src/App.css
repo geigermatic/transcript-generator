@@ -1,0 +1,112 @@
+:root {
+  --bg: #0b1020;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --text: #e6e9f0;
+  --accent: #6ea8fe;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(1200px 800px at 10% 10%, #101635, #050814), var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+}
+
+.glass {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(14px) saturate(120%);
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  min-height: 0;
+  height: calc(100vh - 120px);
+}
+
+.panel {
+  padding: 16px;
+  overflow: auto;
+  min-height: 0;
+}
+
+button.primary {
+  background: linear-gradient(135deg, #4b7bec, #3867d6);
+  color: white;
+  border: none;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.list li {
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.list li:hover {
+  background: rgba(255,255,255,0.06);
+}
+.list li.active {
+  background: rgba(110,168,254,0.18);
+  border: 1px solid rgba(110,168,254,0.33);
+}
+
+.progress {
+  height: 8px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.progress .bar {
+  height: 100%;
+  background: linear-gradient(90deg, #6ea8fe, #4bc0c8);
+  width: 0%;
+  transition: width 200ms linear;
+}
+
+.json-view {
+  background: rgba(0,0,0,0.35);
+  padding: 12px;
+  border-radius: 8px;
+  height: 40vh;
+  overflow: auto;
+}
+
+.markdown {
+  margin-top: 12px;
+  line-height: 1.5;
+}
