@@ -8,6 +8,11 @@ contextBridge.exposeInMainWorld('api', {
   },
   summarize: {
     run: (params: { transcriptId: string; model?: string }) => ipcRenderer.invoke('summarize.run', params) as Promise<{ summaryId: string; merged: any; markdown: string }>,
+    onProgress: (cb: (value: number) => void) => {
+      const listener = (_e: any, value: number) => cb(value)
+      ipcRenderer.on('summarize.progress', listener)
+      return () => ipcRenderer.off('summarize.progress', listener)
+    }
   },
   glossary: {
     list: () => ipcRenderer.invoke('glossary.list'),

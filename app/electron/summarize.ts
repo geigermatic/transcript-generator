@@ -32,7 +32,7 @@ type SchemaType = {
   timestamp_refs?: string[]
 }
 
-export async function runSummarization(input: { transcriptId: string; model?: string }) {
+export async function runSummarization(input: { transcriptId: string; model?: string }, hooks?: { onProgress?: (value: number) => void }) {
   const { transcriptId, model } = input
   const transcript = getTranscript(transcriptId)
   if (!transcript) throw new Error('Transcript not found')
@@ -48,6 +48,8 @@ export async function runSummarization(input: { transcriptId: string; model?: st
 
   // Per-chunk JSON extraction
   const perChunkResults: SchemaType[] = []
+  const total = chunks.length
+  let index = 0
   for (const chunk of chunks) {
     const sys = 'You are an offline summarizer. Output STRICT JSON only that matches the given JSON Schema.'
     const user = [
@@ -80,6 +82,8 @@ export async function runSummarization(input: { transcriptId: string; model?: st
     } catch {
       perChunkResults.push({ key_takeaways: [], topics: [] })
     }
+    index += 1
+    hooks?.onProgress?.(Math.round((index / total) * 80))
   }
 
   const merged = mergeSchemaResults(perChunkResults)
@@ -91,6 +95,7 @@ export async function runSummarization(input: { transcriptId: string; model?: st
     'Facts JSON:',
     JSON.stringify(merged),
   ].join('\n')
+  hooks?.onProgress?.(90)
   const res2 = await ollama.chat({ model: chosenModel, messages: [
     { role: 'system', content: sys2 },
     { role: 'user', content: user2 },
@@ -98,6 +103,7 @@ export async function runSummarization(input: { transcriptId: string; model?: st
   const markdown = res2.message.content
 
   const summaryId = upsertSummary(transcriptId, merged, markdown)
+  hooks?.onProgress?.(100)
   return { summaryId, merged, markdown }
 }
 

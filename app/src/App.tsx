@@ -29,12 +29,13 @@ function App() {
   const onSummarize = async () => {
     if (!activeTranscriptId) return
     setIsSummarizing(true)
-    setProgress(10)
+    setProgress(0)
+    const off = window.api.summarize.onProgress((v) => setProgress(v))
     try {
       const res = await window.api.summarize.run({ transcriptId: activeTranscriptId })
       setResult(res)
-      setProgress(100)
     } finally {
+      off()
       setIsSummarizing(false)
       setTimeout(() => setProgress(0), 800)
     }

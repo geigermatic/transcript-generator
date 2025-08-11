@@ -9,6 +9,7 @@ declare global {
       }
       summarize: {
         run: (params: { transcriptId: string; model?: string }) => Promise<{ summaryId: string; merged: any; markdown: string }>
+        onProgress: (cb: (value: number) => void) => () => void
       }
       glossary: {
         list: () => Promise<any>

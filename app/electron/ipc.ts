@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
 import { ollama } from 'ollama'
-import { db } from './persistence/db'
+import { db, listGlossary, upsertGlossary, removeGlossary, listExamples, upsertExample, removeExample } from './persistence/db'
 import { ingestFileToText } from './persistence/ingest'
 import { runSummarization } from './summarize'
 import { getAllowedHosts, getBlockedRequestCount } from './security'
@@ -34,7 +34,11 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null) {
   ipcMain.handle('summarize.run', async (_e, input: { transcriptId: string; model?: string }) => {
     const schema = z.object({ transcriptId: z.string().min(1), model: z.string().optional() })
     const { transcriptId, model } = schema.parse(input)
-    return runSummarization({ transcriptId, model })
+    const win = getWin()
+    const onProgress = (value: number) => {
+      win?.webContents.send('summarize.progress', value)
+    }
+    return runSummarization({ transcriptId, model }, { onProgress })
   })
 
   ipcMain.handle('privacy.status', async () => {
@@ -50,6 +54,28 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null) {
   })
 
   // Placeholder for glossary/examples CRUD, to be implemented in MVP steps
+  ipcMain.handle('glossary.list', async () => {
+    return listGlossary()
+  })
+  ipcMain.handle('glossary.upsert', async (_e, entry: { term: string; definition: string; aliases?: string[] }) => {
+    upsertGlossary(entry)
+    return true
+  })
+  ipcMain.handle('glossary.remove', async (_e, term: string) => {
+    removeGlossary(term)
+    return true
+  })
+
+  ipcMain.handle('examples.list', async () => {
+    return listExamples()
+  })
+  ipcMain.handle('examples.upsert', async (_e, example: { id?: string; excerpt: string; target_json: any; notes?: string }) => {
+    return upsertExample(example)
+  })
+  ipcMain.handle('examples.remove', async (_e, id: string) => {
+    removeExample(id)
+    return true
+  })
 }
 
 
