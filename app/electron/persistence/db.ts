@@ -68,6 +68,10 @@ function initSchema(d: Database.Database): void {
       ref_id TEXT NOT NULL,
       vector BLOB NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `)
 }
 
@@ -156,6 +160,16 @@ export function upsertExample(entry: ExampleEntry): string {
 
 export function removeExample(id: string): void {
   db().prepare('DELETE FROM examples WHERE id = ?').run(id)
+}
+
+export function getSetting(key: string): string | undefined {
+  const row = db().prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
+  return row?.value
+}
+
+export function setSetting(key: string, value: string): void {
+  db().prepare('INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value')
+    .run(key, value)
 }
 
 

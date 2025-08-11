@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
 import { ollama } from 'ollama'
-import { db, listGlossary, upsertGlossary, removeGlossary, listExamples, upsertExample, removeExample } from './persistence/db'
+import { db, listGlossary, upsertGlossary, removeGlossary, listExamples, upsertExample, removeExample, getSetting, setSetting, getTranscript } from './persistence/db'
 import { ingestFileToText } from './persistence/ingest'
 import { runSummarization } from './summarize'
 import { getAllowedHosts, getBlockedRequestCount } from './security'
@@ -75,6 +75,28 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null) {
   ipcMain.handle('examples.remove', async (_e, id: string) => {
     removeExample(id)
     return true
+  })
+
+  // Settings
+  ipcMain.handle('settings.get', async (_e, key: string) => {
+    return getSetting(key)
+  })
+  ipcMain.handle('settings.set', async (_e, payload: { key: string; value: string }) => {
+    setSetting(payload.key, payload.value)
+    return true
+  })
+
+  // Chat (grounded on transcript only)
+  ipcMain.handle('chat.ask', async (_e, input: { transcriptId: string; message: string; model?: string }) => {
+    const schema = z.object({ transcriptId: z.string(), message: z.string().min(1), model: z.string().optional() })
+    const { transcriptId, message, model } = schema.parse(input)
+    const t = getTranscript(transcriptId)
+    if (!t) return { answer: '' }
+    const chosenModel = model ?? 'llama3.1:8b-instruct-q4_K_M'
+    const sys = 'You are a helpful assistant. You must answer strictly and only based on the provided transcript text. If unknown, say you do not know.'
+    const user = `Transcript:\n<<<${t.text.slice(0, 12000)}>>>\n\nQuestion: ${message}`
+    const res = await ollama.chat({ model: chosenModel, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], options: { temperature: 0.2, stream: false } })
+    return { answer: res.message.content }
   })
 }
 

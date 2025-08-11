@@ -30,4 +30,11 @@ contextBridge.exposeInMainWorld('api', {
   clipboard: {
     copy: (text: string) => ipcRenderer.invoke('clipboard.copy', text) as Promise<boolean>,
   },
+  settings: {
+    get: (key: string) => ipcRenderer.invoke('settings.get', key) as Promise<string | undefined>,
+    set: (key: string, value: string) => ipcRenderer.invoke('settings.set', { key, value }) as Promise<boolean>,
+  },
+  chat: {
+    ask: (params: { transcriptId: string; message: string; model?: string }) => ipcRenderer.invoke('chat.ask', params) as Promise<{ answer: string }>,
+  }
 })

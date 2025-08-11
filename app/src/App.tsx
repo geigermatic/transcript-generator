@@ -17,6 +17,8 @@ function App() {
   const [newExcerpt, setNewExcerpt] = useState('')
   const [newTargetJson, setNewTargetJson] = useState('')
   const [privacy, setPrivacy] = useState<{ allowedHosts: string[]; blockedRequests: number } | null>(null)
+  const [chatInput, setChatInput] = useState('')
+  const [chatAnswer, setChatAnswer] = useState('')
   const dropRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -193,6 +195,18 @@ function App() {
               </li>
             ))}
           </ul>
+        </div>
+        <div className="glass panel">
+          <h2>Chat</h2>
+          <div className="row">
+            <input className="input" style={{ flex: 1 }} placeholder="Ask a question about the transcript" value={chatInput} onChange={(e) => setChatInput(e.target.value)} />
+            <button disabled={!activeTranscriptId || !chatInput.trim()} onClick={async () => {
+              if (!activeTranscriptId) return
+              const res = await window.api.chat.ask({ transcriptId: activeTranscriptId, message: chatInput, model })
+              setChatAnswer(res.answer)
+            }}>Ask</button>
+          </div>
+          <div className="markdown" style={{ whiteSpace: 'pre-wrap' }}>{chatAnswer}</div>
         </div>
       </section>
     </div>

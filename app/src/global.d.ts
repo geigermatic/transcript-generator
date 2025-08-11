@@ -27,6 +27,13 @@ declare global {
       clipboard: {
         copy: (text: string) => Promise<boolean>
       }
+      settings: {
+        get: (key: string) => Promise<string | undefined>
+        set: (key: string, value: string) => Promise<boolean>
+      }
+      chat: {
+        ask: (params: { transcriptId: string; message: string; model?: string }) => Promise<{ answer: string }>
+      }
     }
   }
 }
