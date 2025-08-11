@@ -25,7 +25,18 @@ function App() {
     refreshGlossary()
     refreshExamples()
     refreshPrivacy()
+    // Load saved model
+    window.api.settings.get('default_model').then((saved) => {
+      if (saved && typeof saved === 'string') setModel(saved)
+    })
   }, [])
+
+  // Persist model when changed
+  useEffect(() => {
+    if (model && model.trim()) {
+      window.api.settings.set('default_model', model.trim())
+    }
+  }, [model])
 
   const refreshGlossary = async () => {
     const list = await window.api.glossary.list()
