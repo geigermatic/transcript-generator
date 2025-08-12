@@ -7,12 +7,14 @@ import mammoth from 'mammoth'
 const REPO_ROOT = path.resolve(__dirname, '..', '..')
 const EVAL_DIR = path.join(REPO_ROOT, 'eval')
 const TRANSCRIPTS_DIR = path.join(EVAL_DIR, 'transcripts')
+const INBOX_DIR = path.join(EVAL_DIR, 'inbox')
 const QA_FILE = path.join(EVAL_DIR, 'qa.jsonl')
 
 const MODEL = process.env.OLLAMA_MODEL || 'llama3.1:8b-instruct-q4_K_M'
 
 async function ensureDirs() {
   await fsp.mkdir(TRANSCRIPTS_DIR, { recursive: true })
+  await fsp.mkdir(INBOX_DIR, { recursive: true })
 }
 
 async function convertToText(inputPath) {
@@ -71,19 +73,34 @@ async function generateQA(transcriptId, text, num = 5) {
 }
 
 async function run() {
-  const inputs = process.argv.slice(2)
-  if (inputs.length === 0) {
-    console.error('Usage: node scripts/eval-bootstrap.mjs <file1> [file2 ...]')
-    process.exit(2)
-  }
+  const args = process.argv.slice(2)
+  const useInbox = args.length === 0 || args.includes('--inbox')
   await ensureDirs()
-  for (const p of inputs) {
+  let files = []
+  if (useInbox) {
+    const all = fs.existsSync(INBOX_DIR) ? await fsp.readdir(INBOX_DIR) : []
+    files = all
+      .filter(f => /\.(txt|md|docx|srt|vtt)$/i.test(f))
+      .slice(0, 50)
+      .map(f => path.join(INBOX_DIR, f))
+    if (files.length === 0) {
+      console.log(`No files found in ${INBOX_DIR}. Drop transcripts there and re-run: npm run eval:bootstrap`)
+      return
+    }
+  } else {
+    files = args
+  }
+  for (const p of files) {
     const abs = path.resolve(p)
     if (!fs.existsSync(abs)) { console.warn(`Skip missing: ${abs}`); continue }
-    const text = await convertToText(abs)
-    const id = await writeTranscript(text, abs)
-    await generateQA(id, text)
-    console.log(`Bootstrapped transcript ${id} and appended QA pairs to ${QA_FILE}`)
+    try {
+      const text = await convertToText(abs)
+      const id = await writeTranscript(text, abs)
+      await generateQA(id, text)
+      console.log(`Bootstrapped transcript ${id} and appended QA pairs to ${QA_FILE}`)
+    } catch (e) {
+      console.warn(`Failed to process ${abs}:`, e?.message || e)
+    }
   }
 }
 
