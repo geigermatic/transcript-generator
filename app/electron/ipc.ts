@@ -172,6 +172,15 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null) {
     const res = await ollama.chat({ model: chosenModel, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], stream: false, options: { temperature: 0.1 } })
     return { answer: res.message.content, retrieved: topRows.map(r => ({ idx: r.idx, score: r.score })) }
   })
+
+  // Agent diagnostics
+  ipcMain.handle('agent.diagnostics', async (_e, input: { transcriptId: string }) => {
+    const schema = z.object({ transcriptId: z.string() })
+    const { transcriptId } = schema.parse(input)
+    const countParas = db().prepare('SELECT COUNT(*) as c FROM agent_paragraphs WHERE transcript_id = ?').get(transcriptId) as any
+    const countEmb = db().prepare('SELECT COUNT(*) as c FROM embeddings_agent WHERE kind = "paragraph" AND ref_id IN (SELECT id FROM agent_paragraphs WHERE transcript_id = ?)').get(transcriptId) as any
+    return { paragraphs: Number(countParas?.c || 0), embeddings: Number(countEmb?.c || 0) }
+  })
 }
 
 

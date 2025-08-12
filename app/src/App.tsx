@@ -23,6 +23,8 @@ function App() {
   const [agentRetrieved, setAgentRetrieved] = useState<Array<{ idx: number; score: number }>>([])
   const [statusLines, setStatusLines] = useState<string[]>([])
   const [indexProgress, setIndexProgress] = useState<{ done: number; total: number } | null>(null)
+  const [showDiag, setShowDiag] = useState(false)
+  const [diag, setDiag] = useState<{ paragraphs: number; embeddings: number } | null>(null)
   const dropRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -213,6 +215,27 @@ function App() {
                 <div className="small">Blocked requests: {privacy.blockedRequests}</div>
               </>
             ) : <div className="small">Loading…</div>}
+          </div>
+
+          <div className="section">
+            <h3>Agent diagnostics</h3>
+            <div className="row"><label className="lbl">Show</label><input type="checkbox" checked={showDiag} onChange={(e)=>{
+              const v = e.target.checked; setShowDiag(v);
+              if (v && activeTranscriptId) {
+                window.api.agent?.diagnostics?.({ transcriptId: activeTranscriptId }).then(setDiag).catch(()=>setDiag(null))
+              }
+            }} /></div>
+            {showDiag && (
+              <div className="small">
+                <div>Indexing: {indexProgress ? `${indexProgress.done}/${indexProgress.total}` : '—'}</div>
+                <div>Paragraphs: {diag?.paragraphs ?? '—'}</div>
+                <div>Embeddings: {diag?.embeddings ?? '—'}</div>
+                <div className="row" style={{marginTop:6}}>
+                  <button onClick={()=>{ if(activeTranscriptId){ window.api.agent?.index({ transcriptId: activeTranscriptId }).catch(()=>{})}}}>Re-index</button>
+                  <button onClick={()=>{ if(activeTranscriptId){ window.api.agent?.diagnostics?.({ transcriptId: activeTranscriptId }).then(setDiag).catch(()=>setDiag(null))}}}>Refresh</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

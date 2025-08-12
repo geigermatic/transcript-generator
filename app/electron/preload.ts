@@ -52,6 +52,7 @@ contextBridge.exposeInMainWorld('api', {
       return () => ipcRenderer.off('agent.index.progress', listener)
     },
     chat: (params: { transcriptId: string; message: string; model?: string; embedModel?: string }) => ipcRenderer.invoke('agent.chat', params) as Promise<{ answer: string; retrieved: Array<{ idx: number; score: number }> }>,
+    diagnostics: (params: { transcriptId: string }) => ipcRenderer.invoke('agent.diagnostics', params) as Promise<{ paragraphs: number; embeddings: number }>,
   },
   ab: {
     submit: (payload: { transcriptId: string; candidateA: string; candidateB: string; winner: 0 | 1; reason?: string }) => ipcRenderer.invoke('ab.submit', payload) as Promise<boolean>,
