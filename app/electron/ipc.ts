@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog, ipcMain, clipboard } from 'electron'
 import { z } from 'zod'
 import ollama from 'ollama'
-import { listGlossary, upsertGlossary, removeGlossary, listExamples, upsertExample, removeExample, getSetting, setSetting, getTranscript } from './persistence/db'
+import { listGlossary, upsertGlossary, removeGlossary, listExamples, upsertExample, removeExample, getSetting, setSetting, getTranscript, insertPreference, upsertDefaultStyleGuideAppend } from './persistence/db'
 import { ingestFileToText } from './persistence/ingest'
 import { runSummarization } from './summarize'
 import { getAllowedHosts, getBlockedRequestCount } from './security'
@@ -84,6 +84,15 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null) {
   })
   ipcMain.handle('settings.set', async (_e, payload: { key: string; value: string }) => {
     setSetting(payload.key, payload.value)
+    return true
+  })
+
+  // A/B preference submission (quality mode)
+  ipcMain.handle('ab.submit', async (_e, payload: { transcriptId: string; candidateA: string; candidateB: string; winner: 0 | 1; reason?: string }) => {
+    insertPreference({ transcript_id: payload.transcriptId, candidate_a: payload.candidateA, candidate_b: payload.candidateB, winner: payload.winner, reason: payload.reason })
+    if (payload.reason && payload.reason.trim()) {
+      upsertDefaultStyleGuideAppend(payload.reason.trim())
+    }
     return true
   })
 

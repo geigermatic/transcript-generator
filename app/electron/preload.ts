@@ -38,5 +38,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   chat: {
     ask: (params: { transcriptId: string; message: string; model?: string }) => ipcRenderer.invoke('chat.ask', params) as Promise<{ answer: string }>,
+  },
+  ab: {
+    submit: (payload: { transcriptId: string; candidateA: string; candidateB: string; winner: 0 | 1; reason?: string }) => ipcRenderer.invoke('ab.submit', payload) as Promise<boolean>,
   }
 })

@@ -73,6 +73,22 @@ function initSchema(d: Database.Database): void {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS style_guides (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      instructions_md TEXT NOT NULL DEFAULT '',
+      author TEXT DEFAULT '',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS preferences (
+      id TEXT PRIMARY KEY,
+      transcript_id TEXT NOT NULL,
+      candidate_a TEXT NOT NULL,
+      candidate_b TEXT NOT NULL,
+      winner INTEGER NOT NULL CHECK(winner IN (0,1)),
+      reason TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `)
 }
 
@@ -161,6 +177,22 @@ export function upsertExample(entry: ExampleEntry): string {
 
 export function removeExample(id: string): void {
   db().prepare('DELETE FROM examples WHERE id = ?').run(id)
+}
+
+export function upsertDefaultStyleGuideAppend(note: string): void {
+  const existing = db().prepare("SELECT id, instructions_md FROM style_guides WHERE id = 'default'").get() as { id: string, instructions_md: string } | undefined
+  const appended = (existing?.instructions_md ? existing.instructions_md + '\n' : '') + `- ${note}`
+  db().prepare(`INSERT INTO style_guides(id, name, instructions_md, author)
+    VALUES('default', 'Default', @instructions_md, '')
+    ON CONFLICT(id) DO UPDATE SET instructions_md=excluded.instructions_md, updated_at=CURRENT_TIMESTAMP
+  `).run({ instructions_md: appended })
+}
+
+export function insertPreference(payload: { transcript_id: string; candidate_a: string; candidate_b: string; winner: 0 | 1; reason?: string }): string {
+  const id = randomId()
+  db().prepare('INSERT INTO preferences(id, transcript_id, candidate_a, candidate_b, winner, reason) VALUES (@id, @transcript_id, @candidate_a, @candidate_b, @winner, @reason)')
+    .run({ id, transcript_id: payload.transcript_id, candidate_a: payload.candidate_a, candidate_b: payload.candidate_b, winner: payload.winner, reason: payload.reason ?? '' })
+  return id
 }
 
 export function getSetting(key: string): string | undefined {
