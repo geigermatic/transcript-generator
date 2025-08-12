@@ -99,7 +99,9 @@ if (typeof window !== 'undefined' && !(window as any).api) {
   const saveExamples = () => setLS('web.examples', examples)
 
   let progressListeners: Array<(n: number) => void> = []
+  let statusListeners: Array<(p: { transcriptId: string; text: string }) => void> = []
   const emitProgress = (n: number) => progressListeners.forEach((cb) => cb(n))
+  const emitStatus = (p: { transcriptId: string; text: string }) => statusListeners.forEach((cb) => cb(p))
 
   ;(window as any).api = {
     env: { web: true, supportedExtensions: ['.txt', '.md', '.srt', '.vtt'] },
@@ -146,16 +148,23 @@ if (typeof window !== 'undefined' && !(window as any).api) {
         progressListeners.push(cb)
         return () => { progressListeners = progressListeners.filter((f) => f !== cb) }
       },
+      onStatus: (cb: (payload: { transcriptId: string; text: string }) => void) => {
+        statusListeners.push(cb)
+        return () => { statusListeners = statusListeners.filter((f) => f !== cb) }
+      },
       run: async ({ transcriptId, model }: { transcriptId: string; model?: string }) => {
         const t = transcripts.find((x) => x.id === transcriptId)
         if (!t) throw new Error('Transcript not found')
         const chosenModel = model || (localStorage.getItem('default_model') || 'llama3.1:8b-instruct-q4_K_M')
+        emitStatus({ transcriptId, text: `Model: ${chosenModel}` })
         const chunks = await chunkByToken(t.text, 1200)
+        emitStatus({ transcriptId, text: `Chunking transcript into ${chunks.length} segment(s) ~1200 tokens each` })
         const perChunk: SchemaType[] = []
         const gl = glossary
         const ex = examples
         let index = 0
         for (const chunk of chunks) {
+          emitStatus({ transcriptId, text: `Extracting JSON from chunk ${index + 1}/${chunks.length}` })
           index += 1
           console.log(`[web summarize] chunk ${index}/${chunks.length} starting (${Math.min(chunk.length, 80)} chars): ${chunk.slice(0, 80).replace(/\n/g, ' ')}...`)
           const sys = 'You are an offline summarizer. Output STRICT JSON only that matches the given JSON Schema.'
@@ -202,6 +211,7 @@ if (typeof window !== 'undefined' && !(window as any).api) {
           emitProgress(Math.round((index / chunks.length) * 80))
         }
         const merged = mergeSchemaResults(perChunk)
+        emitStatus({ transcriptId, text: 'Generating final markdown summary from merged facts' })
         emitProgress(90)
         const sys2 = 'You are a precise technical editor.'
         const user2 = [
