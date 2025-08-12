@@ -37,6 +37,8 @@ export function hybridRetrieve(transcriptId: string, query: string, k = 10, embe
   const qTokens = new Set(tokenize(query))
   const rows = db().prepare('SELECT p.id, p.idx, p.text, e.vector FROM agent_paragraphs p LEFT JOIN embeddings_agent e ON e.ref_id = p.id WHERE p.transcript_id = ? AND (e.kind IS NULL OR e.kind = \"paragraph\") ORDER BY p.idx ASC').all(transcriptId) as Array<{ id: string; idx: number; text: string; vector?: Buffer }>
   const qv = embedVec ? new Float32Array(new Float32Array(embedVec as unknown as number[])) : undefined
+  const qLower = query.toLowerCase()
+  const altPhrase = qLower.replace(/[-_]/g, ' ')
   const scored = rows.map(r => {
     const pTokens = new Set(tokenize(r.text))
     let bm = 0; for (const tok of qTokens) if (pTokens.has(tok)) bm += 1
@@ -45,7 +47,9 @@ export function hybridRetrieve(transcriptId: string, query: string, k = 10, embe
       const pv = new Float32Array(r.vector.buffer, r.vector.byteOffset, r.vector.length/4)
       sim = cosineSim(pv, qv)
     }
-    const score = 0.6*bm + 0.4*sim
+    const pl = r.text.toLowerCase()
+    const phraseBonus = (pl.includes(qLower) || pl.includes(altPhrase)) ? 5 : 0
+    const score = 0.6*bm + 0.4*sim + phraseBonus
     return { ...r, score }
   })
   scored.sort((a,b) => b.score - a.score)

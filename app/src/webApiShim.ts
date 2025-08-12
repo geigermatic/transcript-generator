@@ -218,7 +218,8 @@ if (typeof window !== 'undefined' && !(window as any).api) {
         const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean).filter(w => !stop.has(w))
         const qTokens = new Set(tokenize('summary facts key takeaways topics action items'))
         const paras = t.text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
-        const scored = paras.map((p, idx) => { const pTokens = new Set(tokenize(p)); let bm=0; for (const tok of qTokens) if (pTokens.has(tok)) bm+=1; return { idx, p, bm } }).sort((a,b)=>b.bm-a.bm)
+        const qLower = message.toLowerCase(); const alt = qLower.replace(/[-_]/g,' ')
+        const scored = paras.map((p, idx) => { const pTokens = new Set(tokenize(p)); let bm=0; for (const tok of qTokens) if (pTokens.has(tok)) bm+=1; const pl=p.toLowerCase(); const bonus=(pl.includes(qLower)||pl.includes(alt))?5:0; return { idx, p, bm: bm+bonus } }).sort((a,b)=>b.bm-a.bm)
         const agentExcerpts = scored.slice(0,5).map(s=>s.p.slice(0,1200))
         emitProgress(90)
         const sys2 = 'You are a precise technical editor.'
