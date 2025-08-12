@@ -1,1 +1,58 @@
-"use strict";const r=require("electron");r.contextBridge.exposeInMainWorld("api",{env:{web:!1,supportedExtensions:[".txt",".md",".srt",".vtt",".docx"]},ingest:{openFilePicker:()=>r.ipcRenderer.invoke("ingest.openFilePicker"),fromDrop:e=>r.ipcRenderer.invoke("ingest.fromDrop",e)},summarize:{run:e=>r.ipcRenderer.invoke("summarize.run",e),onProgress:e=>{const n=(s,i)=>e(i);return r.ipcRenderer.on("summarize.progress",n),()=>r.ipcRenderer.off("summarize.progress",n)},onStatus:e=>{const n=(s,i)=>e(i);return r.ipcRenderer.on("summarize.status",n),()=>r.ipcRenderer.off("summarize.status",n)}},glossary:{list:()=>r.ipcRenderer.invoke("glossary.list"),upsert:e=>r.ipcRenderer.invoke("glossary.upsert",e),remove:e=>r.ipcRenderer.invoke("glossary.remove",e)},examples:{list:()=>r.ipcRenderer.invoke("examples.list"),upsert:e=>r.ipcRenderer.invoke("examples.upsert",e),remove:e=>r.ipcRenderer.invoke("examples.remove",e)},privacy:{status:()=>r.ipcRenderer.invoke("privacy.status")},clipboard:{copy:e=>r.ipcRenderer.invoke("clipboard.copy",e)},settings:{get:e=>r.ipcRenderer.invoke("settings.get",e),set:(e,n)=>r.ipcRenderer.invoke("settings.set",{key:e,value:n})},chat:{ask:e=>r.ipcRenderer.invoke("chat.ask",e)},agent:{index:e=>r.ipcRenderer.invoke("agent.index",e),onIndexProgress:e=>{const n=(s,i)=>e(i);return r.ipcRenderer.on("agent.index.progress",n),()=>r.ipcRenderer.off("agent.index.progress",n)},chat:e=>r.ipcRenderer.invoke("agent.chat",e)},ab:{submit:e=>r.ipcRenderer.invoke("ab.submit",e)}});
+"use strict";
+const electron = require("electron");
+electron.contextBridge.exposeInMainWorld("api", {
+  env: { web: false, supportedExtensions: [".txt", ".md", ".srt", ".vtt", ".docx"] },
+  ingest: {
+    openFilePicker: () => electron.ipcRenderer.invoke("ingest.openFilePicker"),
+    fromDrop: (filePath) => electron.ipcRenderer.invoke("ingest.fromDrop", filePath)
+  },
+  summarize: {
+    run: (params) => electron.ipcRenderer.invoke("summarize.run", params),
+    onProgress: (cb) => {
+      const listener = (_e, value) => cb(value);
+      electron.ipcRenderer.on("summarize.progress", listener);
+      return () => electron.ipcRenderer.off("summarize.progress", listener);
+    },
+    onStatus: (cb) => {
+      const listener = (_e, payload) => cb(payload);
+      electron.ipcRenderer.on("summarize.status", listener);
+      return () => electron.ipcRenderer.off("summarize.status", listener);
+    }
+  },
+  glossary: {
+    list: () => electron.ipcRenderer.invoke("glossary.list"),
+    upsert: (entry) => electron.ipcRenderer.invoke("glossary.upsert", entry),
+    remove: (term) => electron.ipcRenderer.invoke("glossary.remove", term)
+  },
+  examples: {
+    list: () => electron.ipcRenderer.invoke("examples.list"),
+    upsert: (example) => electron.ipcRenderer.invoke("examples.upsert", example),
+    remove: (id) => electron.ipcRenderer.invoke("examples.remove", id)
+  },
+  privacy: {
+    status: () => electron.ipcRenderer.invoke("privacy.status")
+  },
+  clipboard: {
+    copy: (text) => electron.ipcRenderer.invoke("clipboard.copy", text)
+  },
+  settings: {
+    get: (key) => electron.ipcRenderer.invoke("settings.get", key),
+    set: (key, value) => electron.ipcRenderer.invoke("settings.set", { key, value })
+  },
+  chat: {
+    ask: (params) => electron.ipcRenderer.invoke("chat.ask", params)
+  },
+  agent: {
+    index: (params) => electron.ipcRenderer.invoke("agent.index", params),
+    onIndexProgress: (cb) => {
+      const listener = (_e, payload) => cb(payload);
+      electron.ipcRenderer.on("agent.index.progress", listener);
+      return () => electron.ipcRenderer.off("agent.index.progress", listener);
+    },
+    chat: (params) => electron.ipcRenderer.invoke("agent.chat", params),
+    diagnostics: (params) => electron.ipcRenderer.invoke("agent.diagnostics", params)
+  },
+  ab: {
+    submit: (payload) => electron.ipcRenderer.invoke("ab.submit", payload)
+  }
+});
