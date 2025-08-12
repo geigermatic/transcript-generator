@@ -16,7 +16,7 @@ function App() {
   const [examples, setExamples] = useState<Array<{ id?: string; excerpt: string; target_json: any; notes?: string }>>([])
   const [newExcerpt, setNewExcerpt] = useState('')
   const [newTargetJson, setNewTargetJson] = useState('')
-  const [privacy, setPrivacy] = useState<{ allowedHosts: string[]; blockedRequests: number } | null>(null)
+  // Privacy section removed
   const [chatInput, setChatInput] = useState('')
   const [chatAnswer, setChatAnswer] = useState('')
   const [agentChat, setAgentChat] = useState(true)
@@ -30,7 +30,6 @@ function App() {
   useEffect(() => {
     refreshGlossary()
     refreshExamples()
-    refreshPrivacy()
     // Load saved model
     window.api.settings.get('default_model').then((saved) => {
       if (saved && typeof saved === 'string') setModel(saved)
@@ -79,10 +78,7 @@ function App() {
     const list = await window.api.examples.list()
     setExamples(list)
   }
-  const refreshPrivacy = async () => {
-    const s = await window.api.privacy.status()
-    setPrivacy(s)
-  }
+  // Privacy diagnostic removed
 
   const onPickFiles = async () => {
     const ids = await window.api.ingest.openFilePicker()
@@ -204,18 +200,7 @@ function App() {
             </div>
           )}
 
-          <div className="section">
-            <h3>Privacy</h3>
-            {privacy ? (
-              <>
-                <div className="small">Allowed hosts:</div>
-                <ul className="mini">
-                  {privacy.allowedHosts.map((h) => <li key={h}>{h}</li>)}
-                </ul>
-                <div className="small">Blocked requests: {privacy.blockedRequests}</div>
-              </>
-            ) : <div className="small">Loading…</div>}
-          </div>
+          {/* Privacy section removed */}
 
           <div className="section">
             <h3>Agent diagnostics</h3>
