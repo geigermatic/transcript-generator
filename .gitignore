@@ -71,6 +71,12 @@ dist/
 build/
 out/
 
+# Eval artifacts (keep README, ignore generated content)
+eval/inbox/
+eval/transcripts/
+eval/baseline.json
+eval/qa.jsonl
+
 # Python
 __pycache__/
 *.py[cod]
