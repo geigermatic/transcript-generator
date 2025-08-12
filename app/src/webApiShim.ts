@@ -104,6 +104,29 @@ if (typeof window !== 'undefined' && !(window as any).api) {
   const emitProgress = (n: number) => progressListeners.forEach((cb) => cb(n))
   const emitStatus = (p: { transcriptId: string; text: string }) => statusListeners.forEach((cb) => cb(p))
 
+  function splitParasSmart(text: string): string[] {
+    let paras = text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
+    if (paras.length <= 1) {
+      // fallback: group single-line breaks into ~500 char blocks
+      const lines = text.split(/\n+/).map(s => s.trim()).filter(Boolean)
+      const blocks: string[] = []
+      let cur: string[] = []
+      let len = 0
+      for (const ln of lines) {
+        if (len + ln.length > 500 && cur.length) {
+          blocks.push(cur.join('\n'))
+          cur = []
+          len = 0
+        }
+        cur.push(ln)
+        len += ln.length + 1
+      }
+      if (cur.length) blocks.push(cur.join('\n'))
+      paras = blocks.length ? blocks : [text]
+    }
+    return paras
+  }
+
   ;(window as any).api = {
     env: { web: true, supportedExtensions: ['.txt', '.md', '.srt', '.vtt'] },
     ingest: {
@@ -217,7 +240,7 @@ if (typeof window !== 'undefined' && !(window as any).api) {
         const stop = new Set(['the','a','an','and','or','of','to','in','on','for','with','as','is','are','was','were','be','by','that','this','it','at','from','we','you','they','he','she'])
         const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean).filter(w => !stop.has(w))
         const qTokens = new Set(tokenize('summary facts key takeaways topics action items'))
-        const paras = t.text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
+        const paras = splitParasSmart(t.text)
         const scored = paras.map((p, idx) => { const pTokens = new Set(tokenize(p)); let bm=0; for (const tok of qTokens) if (pTokens.has(tok)) bm+=1; return { idx, p, bm } }).sort((a,b)=>b.bm-a.bm)
         const agentExcerpts = scored.slice(0,5).map(s=>s.p.slice(0,1200))
         emitProgress(90)
@@ -304,8 +327,12 @@ if (typeof window !== 'undefined' && !(window as any).api) {
             })
             if (res.ok) {
               const data = await res.json() as any
-              const embs = (data?.embeddings || data?.data || []) as number[][]
-              for (const v of embs) vectors.push(v)
+              const embsArr = (data?.embeddings || data?.data) as number[][] | undefined
+              if (Array.isArray(embsArr)) {
+                for (const v of embsArr) vectors.push(v as number[])
+              } else if (Array.isArray(batch) && batch.length === 1 && Array.isArray(data?.embedding)) {
+                vectors.push(data.embedding as number[])
+              }
             }
           } catch {}
           agentProgressListeners.forEach(cb => cb({ transcriptId, done: Math.min(i + batch.length, paras.length), total: paras.length }))
@@ -333,7 +360,7 @@ if (typeof window !== 'undefined' && !(window as any).api) {
         let qv: number[] | undefined
         try {
           const res = await fetch('http://127.0.0.1:11434/api/embeddings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: embedModel || 'nomic-embed-text', input: message }) })
-          if (res.ok) { const data = await res.json() as any; qv = (data?.embeddings?.[0] || data?.data?.[0] || []) as number[] }
+          if (res.ok) { const data = await res.json() as any; qv = (data?.embeddings?.[0] || data?.data?.[0] || data?.embedding || []) as number[] }
         } catch {}
         const cosine = (a: number[], b: number[]) => {
           let dot = 0, na = 0, nb = 0
