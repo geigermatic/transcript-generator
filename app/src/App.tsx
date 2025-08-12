@@ -165,7 +165,7 @@ function App() {
           {isSummarizing && (
             <div className="progress"><div className="bar" style={{ width: `${progress}%` }} /></div>
           )}
-          {isSummarizing && statusLines.length > 0 && (
+          {statusLines.length > 0 && (
             <div className="small" style={{ marginTop: 6 }}>
               {statusLines.map((s, i) => (<div key={i}>• {s}</div>))}
             </div>
