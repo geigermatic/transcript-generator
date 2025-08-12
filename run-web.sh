@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$SCRIPT_DIR/app"
 MODEL="${MODEL:-llama3.1:8b-instruct-q4_K_M}"
+EMBED_MODEL="${EMBED_MODEL:-nomic-embed-text}"
 PORT="${PORT:-3000}"
 
 echo "[run-web] Checking Ollama on http://127.0.0.1:11434 ..."
@@ -20,6 +21,11 @@ fi
 echo "[run-web] Ensuring model '$MODEL' is available..."
 if ! ollama show "$MODEL" >/dev/null 2>&1; then
   ollama pull "$MODEL"
+fi
+
+echo "[run-web] Ensuring embed model '$EMBED_MODEL' is available (for agent)..."
+if ! ollama show "$EMBED_MODEL" >/dev/null 2>&1; then
+  ollama pull "$EMBED_MODEL"
 fi
 
 echo "[run-web] Preparing web app at $APP_DIR ..."
