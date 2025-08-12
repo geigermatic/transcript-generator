@@ -131,6 +131,39 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null) {
     const res = await ollama.chat({ model: chosenModel, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], stream: false, options: { temperature: 0.1 } })
     return { answer: res.message.content }
   })
+
+  // Agent indexing (paragraphs + embeddings)
+  ipcMain.handle('agent.index', async (_e, input: { transcriptId: string; model?: string }) => {
+    const schema = z.object({ transcriptId: z.string(), model: z.string().optional() })
+    const { transcriptId, model } = schema.parse(input)
+    const t = getTranscript(transcriptId)
+    if (!t) return { ok: false }
+    const { splitParagraphs, embedParagraphs } = await import('./agent/indexer')
+    const paras = await splitParagraphs(transcriptId, t.text)
+    await embedParagraphs(transcriptId, paras, model || 'nomic-embed-text')
+    return { ok: true, paragraphs: paras.length }
+  })
+
+  // Agent hybrid chat (BM25 + embeddings)
+  ipcMain.handle('agent.chat', async (_e, input: { transcriptId: string; message: string; model?: string, embedModel?: string }) => {
+    const schema = z.object({ transcriptId: z.string(), message: z.string().min(1), model: z.string().optional(), embedModel: z.string().optional() })
+    const { transcriptId, message, model, embedModel } = schema.parse(input)
+    const t = getTranscript(transcriptId)
+    if (!t) return { answer: '' }
+    const chosenModel = model ?? 'llama3.1:8b-instruct-q4_K_M'
+    const { hybridRetrieve } = await import('./agent/indexer')
+    let embedVec: number[] | undefined
+    try {
+      const er = await ollama.embed({ model: embedModel || 'nomic-embed-text', input: message }) as any
+      embedVec = (er?.embeddings?.[0] || er?.embedding) as number[]
+    } catch {}
+    const topRows = hybridRetrieve(transcriptId, message, 5, embedVec)
+    const excerpts = topRows.map(r => r.text.slice(0, 1200))
+    const sys = 'Answer strictly and only based on the provided transcript excerpts. If the answer is not contained, reply: "I do not know based on the transcript."'
+    const user = ['Relevant transcript excerpts (do not infer beyond these):', ...excerpts.map((t, i) => `Excerpt ${i+1}:\n${t}`), '', `Question: ${message}`].join('\n')
+    const res = await ollama.chat({ model: chosenModel, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], stream: false, options: { temperature: 0.1 } })
+    return { answer: res.message.content, retrieved: topRows.map(r => ({ idx: r.idx, score: r.score })) }
+  })
 }
 
 

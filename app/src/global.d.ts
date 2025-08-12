@@ -34,6 +34,10 @@ declare global {
       chat: {
         ask: (params: { transcriptId: string; message: string; model?: string }) => Promise<{ answer: string }>
       }
+      agent: {
+        index: (params: { transcriptId: string; model?: string }) => Promise<{ ok: boolean; paragraphs: number }>
+        chat: (params: { transcriptId: string; message: string; model?: string; embedModel?: string }) => Promise<{ answer: string; retrieved: Array<{ idx: number; score: number }> }>
+      }
       ab: {
         submit: (payload: { transcriptId: string; candidateA: string; candidateB: string; winner: 0 | 1; reason?: string }) => Promise<boolean>
       }

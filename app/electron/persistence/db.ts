@@ -73,6 +73,18 @@ function initSchema(d: Database.Database): void {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS agent_paragraphs (
+      id TEXT PRIMARY KEY,
+      transcript_id TEXT NOT NULL,
+      idx INTEGER NOT NULL,
+      text TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS embeddings_agent (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      ref_id TEXT NOT NULL,
+      vector BLOB NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS style_guides (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
