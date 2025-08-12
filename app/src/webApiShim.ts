@@ -239,9 +239,30 @@ if (typeof window !== 'undefined' && !(window as any).api) {
         const t = transcripts.find((x) => x.id === transcriptId)
         if (!t) return { answer: '' }
         const chosenModel = model || (localStorage.getItem('default_model') || 'llama3.1:8b-instruct-q4_K_M')
-        const sys = 'You are a helpful assistant. You must answer strictly and only based on the provided transcript text. If unknown, say you do not know.'
-        const user = `Transcript:\n<<<${t.text.slice(0, 12000)}>>>\n\nQuestion: ${message}`
-        const answer = await ollamaChat(chosenModel, [ { role: 'system', content: sys }, { role: 'user', content: user } ], { temperature: 0.2 })
+        const sys = 'You are a helpful assistant. Answer strictly and only based on the provided transcript excerpts. If the answer is not contained, reply: "I do not know based on the transcript."'
+
+        // Naive retrieval over paragraphs
+        const stop = new Set(['the','a','an','and','or','of','to','in','on','for','with','as','is','are','was','were','be','by','that','this','it','at','from','we','you','they','he','she'])
+        const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean).filter(w => !stop.has(w))
+        const qTokens = new Set(tokenize(message))
+        const paragraphs = t.text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
+        const scored = paragraphs.map((p, idx) => {
+          const pTokens = new Set(tokenize(p))
+          let score = 0
+          for (const tok of qTokens) if (pTokens.has(tok)) score += 1
+          return { idx, p, score }
+        })
+        scored.sort((a, b) => b.score - a.score)
+        const top = scored.slice(0, 5).map(s => s.p.slice(0, 1200))
+
+        const user = [
+          'Relevant transcript excerpts (do not infer beyond these):',
+          ...top.map((t, i) => `Excerpt ${i+1}:\n${t}`),
+          '',
+          `Question: ${message}`,
+        ].join('\n')
+
+        const answer = await ollamaChat(chosenModel, [ { role: 'system', content: sys }, { role: 'user', content: user } ], { temperature: 0.1 })
         return { answer }
       },
     },
