@@ -66,10 +66,20 @@ async function generateQA(transcriptId, text, num = 5) {
     text.slice(0, 12000),
   ].join('\n')
   const res = await ollama.chat({ model: MODEL, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], stream: false, format: 'json', options: { temperature: 0.2 } })
-  let items = []
+  let itemsRaw = []
   try {
-    items = JSON.parse(res.message?.content ?? '[]')
-  } catch { items = [] }
+    const content = res.message?.content ?? '[]'
+    const parsed = JSON.parse(content)
+    if (Array.isArray(parsed)) itemsRaw = parsed
+    else if (parsed && Array.isArray(parsed.items)) itemsRaw = parsed.items
+    else if (parsed && Array.isArray(parsed.qa)) itemsRaw = parsed.qa
+    else if (parsed && Array.isArray(parsed.pairs)) itemsRaw = parsed.pairs
+    else itemsRaw = []
+  } catch (e) {
+    console.warn('QA parse failed; skipping QA generation:', (e?.message || e))
+    itemsRaw = []
+  }
+  const items = (Array.isArray(itemsRaw) ? itemsRaw : []).filter(it => it && typeof it.question === 'string' && typeof it.answer === 'string')
   const lines = items.slice(0, num).map(it => JSON.stringify({ transcript_id: transcriptId, question: it.question, answer: it.answer }))
   if (lines.length) await fsp.appendFile(QA_FILE, lines.join('\n') + '\n', 'utf8')
 }
