@@ -22496,11 +22496,22 @@ function EF(e) {
   })), rt.handle("clipboard.copy", async (t, n) => (av.writeText(n), !0)), rt.handle("glossary.list", async () => mm()), rt.handle("glossary.upsert", async (t, n) => ($_(n), !0)), rt.handle("glossary.remove", async (t, n) => (P_(n), !0)), rt.handle("examples.list", async () => bm()), rt.handle("examples.upsert", async (t, n) => z_(n)), rt.handle("examples.remove", async (t, n) => (q_(n), !0)), rt.handle("settings.get", async (t, n) => j_(n)), rt.handle("settings.set", async (t, n) => (Z_(n.key, n.value), !0)), rt.handle("chat.ask", async (t, n) => {
     const r = jl({ transcriptId: ei(), message: ei().min(1), model: ei().optional() }), { transcriptId: i, message: a, model: o } = r.parse(n), c = gm(i);
     if (!c) return { answer: "" };
-    const u = o ?? "llama3.1:8b-instruct-q4_K_M", s = "You are a helpful assistant. You must answer strictly and only based on the provided transcript text. If unknown, say you do not know.", d = `Transcript:
-<<<${c.text.slice(0, 12e3)}>>>
-
-Question: ${a}`;
-    return { answer: (await hu.chat({ model: u, messages: [{ role: "system", content: s }, { role: "user", content: d }], stream: !1, options: { temperature: 0.2 } })).message.content };
+    const u = o ?? "llama3.1:8b-instruct-q4_K_M", s = 'You are a helpful assistant. Answer strictly and only based on the provided transcript excerpts. If the answer is not contained, reply: "I do not know based on the transcript."', d = /* @__PURE__ */ new Set(["the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "as", "is", "are", "was", "were", "be", "by", "that", "this", "it", "at", "from", "we", "you", "they", "he", "she"]), g = (f) => f.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean).filter((v) => !d.has(v)), l = new Set(g(a)), b = c.text.split(/\n{2,}/).map((f) => f.trim()).filter(Boolean).map((f, v) => {
+      const D = new Set(g(f));
+      let x = 0;
+      for (const w of l) D.has(w) && (x += 1);
+      return { idx: v, p: f, score: x };
+    });
+    b.sort((f, v) => v.score - f.score);
+    const y = [
+      "Relevant transcript excerpts (do not infer beyond these):",
+      ...b.slice(0, 5).map((f) => f.p.slice(0, 1200)).map((f, v) => `Excerpt ${v + 1}:
+${f}`),
+      "",
+      `Question: ${a}`
+    ].join(`
+`);
+    return { answer: (await hu.chat({ model: u, messages: [{ role: "system", content: s }, { role: "user", content: y }], stream: !1, options: { temperature: 0.1, num_ctx: 8192 } })).message.content };
   }));
 }
 const J1 = ht.dirname(ov(import.meta.url));

@@ -254,6 +254,8 @@ if (typeof window !== 'undefined' && !(window as any).api) {
         })
         scored.sort((a, b) => b.score - a.score)
         const top = scored.slice(0, 5).map(s => s.p.slice(0, 1200))
+        console.log('[web chat] question:', message)
+        console.log('[web chat] top paragraph scores:', scored.slice(0, 5).map(s => ({ idx: s.idx, score: s.score, preview: s.p.slice(0, 60).replace(/\n/g, ' ') })))
 
         const user = [
           'Relevant transcript excerpts (do not infer beyond these):',

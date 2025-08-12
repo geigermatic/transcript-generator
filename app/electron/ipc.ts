@@ -109,6 +109,8 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null) {
     })
     scored.sort((a, b) => b.score - a.score)
     const top = scored.slice(0, 5).map(s => s.p.slice(0, 1200))
+    console.log(`[chat] question: ${message}`)
+    console.log(`[chat] top paragraph scores:`, scored.slice(0, 5).map(s => ({ idx: s.idx, score: s.score, preview: s.p.slice(0, 60).replace(/\n/g, ' ') })))
 
     const user = [
       'Relevant transcript excerpts (do not infer beyond these):',
@@ -117,7 +119,7 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null) {
       `Question: ${message}`,
     ].join('\n')
 
-    const res = await ollama.chat({ model: chosenModel, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], stream: false, options: { temperature: 0.1, num_ctx: 8192 as any } })
+    const res = await ollama.chat({ model: chosenModel, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], stream: false, options: { temperature: 0.1 } })
     return { answer: res.message.content }
   })
 }
