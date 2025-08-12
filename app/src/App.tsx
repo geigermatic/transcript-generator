@@ -19,6 +19,8 @@ function App() {
   const [privacy, setPrivacy] = useState<{ allowedHosts: string[]; blockedRequests: number } | null>(null)
   const [chatInput, setChatInput] = useState('')
   const [chatAnswer, setChatAnswer] = useState('')
+  const [agentChat, setAgentChat] = useState(false)
+  const [agentRetrieved, setAgentRetrieved] = useState<Array<{ idx: number; score: number }>>([])
   const dropRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -55,6 +57,10 @@ function App() {
     const ids = await window.api.ingest.openFilePicker()
     setTranscriptIds((prev) => [...ids, ...prev])
     if (ids[0]) setActiveTranscriptId(ids[0])
+    // Kick off indexing in background
+    for (const id of ids) {
+      window.api.agent?.index({ transcriptId: id }).catch(() => {})
+    }
   }
 
   const onDrop: React.DragEventHandler<HTMLDivElement> = async (e) => {
@@ -64,6 +70,7 @@ function App() {
     const id = await window.api.ingest.fromDrop(f.path)
     setTranscriptIds((prev) => [id, ...prev])
     setActiveTranscriptId(id)
+    window.api.agent?.index({ transcriptId: id }).catch(() => {})
   }
 
   const onSummarize = async () => {
@@ -134,6 +141,7 @@ function App() {
       <main className="grid">
         <div className="glass panel" onDragOver={(e) => e.preventDefault()} onDrop={onDrop} ref={dropRef}>
           <h2>Drop transcript here</h2>
+          <div className="row"><label className="lbl">Agent chat</label><input type="checkbox" checked={agentChat} onChange={(e) => setAgentChat(e.target.checked)} /></div>
           {(() => {
             const supported = (window as any).api?.env?.supportedExtensions as string[] | undefined
             return supported ? <div className="small">Supported: {supported.join(', ')}{(window as any).api?.env?.web ? ' (.docx not supported in web mode)' : ''}</div> : null
@@ -174,6 +182,9 @@ function App() {
             </>
           ) : (
             <p>No summary yet.</p>
+          )}
+          {agentChat && agentRetrieved.length > 0 && (
+            <div className="section small">Retrieved excerpts: {agentRetrieved.map(r => `#${r.idx} (${r.score.toFixed(2)})`).join(', ')}</div>
           )}
         </div>
       </main>
@@ -217,8 +228,15 @@ function App() {
             <input className="input" style={{ flex: 1 }} placeholder="Ask a question about the transcript" value={chatInput} onChange={(e) => setChatInput(e.target.value)} />
             <button disabled={!activeTranscriptId || !chatInput.trim()} onClick={async () => {
               if (!activeTranscriptId) return
-              const res = await window.api.chat.ask({ transcriptId: activeTranscriptId, message: chatInput, model })
-              setChatAnswer(res.answer)
+              if (agentChat && window.api.agent?.chat) {
+                const res = await window.api.agent.chat({ transcriptId: activeTranscriptId, message: chatInput, model })
+                setChatAnswer(res.answer)
+                setAgentRetrieved(res.retrieved || [])
+              } else {
+                const res = await window.api.chat.ask({ transcriptId: activeTranscriptId, message: chatInput, model })
+                setChatAnswer(res.answer)
+                setAgentRetrieved([])
+              }
             }}>Ask</button>
           </div>
           <div className="markdown" style={{ whiteSpace: 'pre-wrap' }}>{chatAnswer}</div>
