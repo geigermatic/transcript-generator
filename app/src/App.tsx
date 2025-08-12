@@ -19,9 +19,10 @@ function App() {
   const [privacy, setPrivacy] = useState<{ allowedHosts: string[]; blockedRequests: number } | null>(null)
   const [chatInput, setChatInput] = useState('')
   const [chatAnswer, setChatAnswer] = useState('')
-  const [agentChat, setAgentChat] = useState(false)
+  const [agentChat, setAgentChat] = useState(true)
   const [agentRetrieved, setAgentRetrieved] = useState<Array<{ idx: number; score: number }>>([])
   const [statusLines, setStatusLines] = useState<string[]>([])
+  const [indexProgress, setIndexProgress] = useState<{ done: number; total: number } | null>(null)
   const dropRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -32,6 +33,10 @@ function App() {
     window.api.settings.get('default_model').then((saved) => {
       if (saved && typeof saved === 'string') setModel(saved)
     })
+    // Load saved agent default
+    window.api.settings.get('agent_chat_default').then((saved) => {
+      if (saved === 'off') setAgentChat(false)
+    })
   }, [])
 
   // Persist model when changed
@@ -40,6 +45,29 @@ function App() {
       window.api.settings.set('default_model', model.trim())
     }
   }, [model])
+
+  // Persist agent default when toggled
+  useEffect(() => {
+    window.api.settings.set('agent_chat_default', agentChat ? 'on' : 'off')
+  }, [agentChat])
+
+  // Auto-index when switching active transcript (agent on)
+  useEffect(() => {
+    if (agentChat && activeTranscriptId) {
+      window.api.agent?.index({ transcriptId: activeTranscriptId }).catch(() => {})
+    }
+  }, [agentChat, activeTranscriptId])
+
+  // Agent indexing progress subscription
+  useEffect(() => {
+    const off = window.api.agent?.onIndexProgress?.((e) => {
+      if (activeTranscriptId && e.transcriptId === activeTranscriptId) {
+        setIndexProgress({ done: e.done, total: e.total })
+      }
+    })
+    return () => { try { off && off() } catch {}
+    }
+  }, [activeTranscriptId])
 
   const refreshGlossary = async () => {
     const list = await window.api.glossary.list()
@@ -164,6 +192,9 @@ function App() {
           <button className="primary" disabled={!activeTranscriptId || isSummarizing} onClick={onSummarize}>Summarize</button>
           {isSummarizing && (
             <div className="progress"><div className="bar" style={{ width: `${progress}%` }} /></div>
+          )}
+          {agentChat && indexProgress && indexProgress.total > 0 && (
+            <div className="small" style={{ marginTop: 6 }}>Indexing: {indexProgress.done}/{indexProgress.total}</div>
           )}
           {statusLines.length > 0 && (
             <div className="small" style={{ marginTop: 6 }}>
