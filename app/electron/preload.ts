@@ -1,7 +1,9 @@
+// Keep this file as ESM build for production; dev uses preload.cjs
 import { ipcRenderer, contextBridge } from 'electron'
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('api', {
+  env: { web: false, supportedExtensions: ['.txt', '.md', '.srt', '.vtt', '.docx'] },
   ingest: {
     openFilePicker: () => ipcRenderer.invoke('ingest.openFilePicker') as Promise<string[]>,
     fromDrop: (filePath: string) => ipcRenderer.invoke('ingest.fromDrop', filePath) as Promise<string>,

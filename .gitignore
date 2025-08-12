@@ -85,3 +85,4 @@ venv.bak/
 
 # Virtual environments
 .venv
+app/release/

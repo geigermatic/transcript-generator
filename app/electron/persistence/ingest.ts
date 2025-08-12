@@ -2,7 +2,7 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import { insertTranscript, computeSha256 } from './db'
 import mammoth from 'mammoth'
-import { parse as parseSrt } from 'subtitle'
+// Avoid subtitle typings issues by doing a simple SRT text extraction
 
 export async function ingestFileToText(filePath: string): Promise<string> {
   const ext = path.extname(filePath).toLowerCase()
@@ -13,7 +13,7 @@ export async function ingestFileToText(filePath: string): Promise<string> {
   if (ext === '.txt' || ext === '.md') {
     text = buf.toString('utf8')
   } else if (ext === '.docx') {
-    const result = await mammoth.extractRawText({ buffer: buf })
+    const result = await mammoth.extractRawText({ buffer: buf as any } as any)
     text = result.value
   } else if (ext === '.vtt') {
     // WebVTT is close to SRT but we can do light parsing by stripping cues
@@ -22,8 +22,17 @@ export async function ingestFileToText(filePath: string): Promise<string> {
       .filter((line) => !/^\d{2}:\d{2}:\d{2}\.\d{3}/.test(line) && !/^WEBVTT/.test(line) && line.trim() !== '')
       .join('\n')
   } else if (ext === '.srt') {
-    const items = parseSrt(buf.toString('utf8'))
-    text = items.map((i: any) => i.type === 'cue' ? i.data.text : '').filter(Boolean).join('\n')
+    const s = buf.toString('utf8')
+    const lines = s.split(/\r?\n/)
+    text = lines
+      .filter((line) => {
+        const trimmed = line.trim()
+        if (!trimmed) return false
+        if (/^\d+$/.test(trimmed)) return false
+        if (/-->/.test(trimmed)) return false
+        return true
+      })
+      .join('\n')
   } else {
     // Fallback: treat as text
     text = buf.toString('utf8')

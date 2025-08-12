@@ -1,18 +1,20 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "YourAppID",
+  "appId": "com.local.transcript.summarizer",
   "asar": true,
-  "productName": "YourAppName",
+  "productName": "Local Transcript Summarizer",
   "directories": {
     "output": "release/${version}"
   },
   "files": [
     "dist",
-    "dist-electron"
+    "dist-electron",
+    "electron/preload.cjs"
   ],
   "mac": {
     "target": [
+      "dir",
       "dmg"
     ],
     "artifactName": "${productName}-Mac-${version}-Installer.${ext}"

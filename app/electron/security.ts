@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session } from 'electron'
+import { BrowserWindow, session } from 'electron'
 
 let blockedRequestCount = 0
 
@@ -6,13 +6,18 @@ export function getBlockedRequestCount(): number {
   return blockedRequestCount
 }
 
-export function setupSecurity(win: BrowserWindow, devServerUrl?: string): void {
+export function setupSecurity(_win: BrowserWindow, devServerUrl?: string): void {
   const defaultSession = session.defaultSession
 
   const allowedOrigins = new Set<string>()
   // Always allow file/app schemes
   // Allow Ollama local endpoint
   allowedOrigins.add('http://127.0.0.1:11434')
+  // In dev, allow both localhost and 127.0.0.1 for Vite regardless of URL form
+  if (devServerUrl) {
+    allowedOrigins.add('http://127.0.0.1:5173')
+    allowedOrigins.add('http://localhost:5173')
+  }
   if (devServerUrl) {
     try {
       const u = new URL(devServerUrl)
@@ -22,7 +27,7 @@ export function setupSecurity(win: BrowserWindow, devServerUrl?: string): void {
 
   // Block all external requests except explicitly allowed
   defaultSession.webRequest.onBeforeRequest((details, callback) => {
-    const { url, resourceType } = details
+    const { url } = details
 
     // Allow data URIs
     if (url.startsWith('data:')) return callback({ cancel: false })
@@ -45,6 +50,10 @@ export function setupSecurity(win: BrowserWindow, devServerUrl?: string): void {
     try {
       const u = new URL(url)
       const origin = `${u.protocol}//${u.host}`
+      // Always allow localhost/127 in dev
+      if (devServerUrl && (u.hostname === '127.0.0.1' || u.hostname === 'localhost')) {
+        return callback({ cancel: false })
+      }
       if (allowedOrigins.has(origin)) {
         return callback({ cancel: false })
       }

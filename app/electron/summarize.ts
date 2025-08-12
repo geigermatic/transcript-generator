@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { getTranscript, listGlossary, listExamples, upsertSummary } from './persistence/db'
 import ollama from 'ollama'
 
@@ -37,20 +36,25 @@ export async function runSummarization(input: { transcriptId: string; model?: st
   const transcript = getTranscript(transcriptId)
   if (!transcript) throw new Error('Transcript not found')
 
-  // Fetch glossary and examples to include in prompts
-  const glossary = listGlossary()
-  const examples = listExamples()
+  // Fetch glossary and examples to include in prompts (limit sizes to avoid ctx truncation)
+  const glossaryAll = listGlossary()
+  const examplesAll = listExamples()
+  const glossary = glossaryAll.slice(0, 20)
+  const examples = examplesAll.slice(0, 2).map(e => ({ ...e, excerpt: e.excerpt.slice(0, 1000) }))
 
   const chosenModel = model ?? 'llama3.1:8b-instruct-q4_K_M'
 
   const encodedLengthFn = await resolveTokenCounter(chosenModel)
-  const chunks = chunkByToken(transcript.text, 3500, encodedLengthFn)
+  const chunks = chunkByToken(transcript.text, 1200, encodedLengthFn)
 
   // Per-chunk JSON extraction
   const perChunkResults: SchemaType[] = []
   const total = chunks.length
   let index = 0
   for (const chunk of chunks) {
+    index += 1
+    // Log to terminal (Electron main process)
+    console.log(`[summarize] chunk ${index}/${total} starting (${Math.min(chunk.length, 80)} chars preview: ${chunk.slice(0, 80).replace(/\n/g, ' ')}...)`)
     const sys = 'You are an offline summarizer. Output STRICT JSON only that matches the given JSON Schema.'
     const user = [
       'Verified glossary (authoritative terms and definitions):',
@@ -74,15 +78,20 @@ export async function runSummarization(input: { transcriptId: string; model?: st
         { role: 'system', content: sys },
         { role: 'user', content: user },
       ],
-      options: { temperature: 0.2, format: 'json', stream: false },
+      // @ts-ignore
+      format: 'json',
+      stream: false,
+      options: { temperature: 0.2 },
     })
     try {
-      const parsed = JSON.parse(res.message.content) as SchemaType
+      const content = res.message?.content ?? '{}'
+      const parsed = JSON.parse(content) as SchemaType
       perChunkResults.push(parsed)
+      console.log(`[summarize] chunk ${index}/${total} parsed OK: keys=${Object.keys(parsed).join(',')}`)
     } catch {
       perChunkResults.push({ key_takeaways: [], topics: [] })
+      console.warn(`[summarize] chunk ${index}/${total} parse failed; added empty result`)
     }
-    index += 1
     hooks?.onProgress?.(Math.round((index / total) * 80))
   }
 
@@ -99,7 +108,7 @@ export async function runSummarization(input: { transcriptId: string; model?: st
   const res2 = await ollama.chat({ model: chosenModel, messages: [
     { role: 'system', content: sys2 },
     { role: 'user', content: user2 },
-  ], options: { temperature: 0.2, stream: false } })
+  ], stream: false, options: { temperature: 0.2 } })
   const markdown = res2.message.content
 
   const summaryId = upsertSummary(transcriptId, merged, markdown)
@@ -134,13 +143,13 @@ function mergeSchemaResults(results: SchemaType[]): SchemaType {
   return out
 }
 
-async function resolveTokenCounter(model: string) {
+async function resolveTokenCounter(_model: string) {
   // If Ollama exposes tokenizer info, we could query it. For now, approximate by characters.
   // 1 token ~= 4 chars heuristic for LLaMA-class models
   return async (text: string) => Math.ceil(text.length / 4)
 }
 
-function chunkByToken(text: string, targetTokens: number, countTokens: (t: string) => Promise<number>): string[] {
+function chunkByToken(text: string, targetTokens: number, _countTokens: (t: string) => Promise<number>): string[] {
   const chunks: string[] = []
   const paragraphs = text.split(/\n{2,}/)
   let current: string[] = []

@@ -134,6 +134,10 @@ function App() {
       <main className="grid">
         <div className="glass panel" onDragOver={(e) => e.preventDefault()} onDrop={onDrop} ref={dropRef}>
           <h2>Drop transcript here</h2>
+          {(() => {
+            const supported = (window as any).api?.env?.supportedExtensions as string[] | undefined
+            return supported ? <div className="small">Supported: {supported.join(', ')}{(window as any).api?.env?.web ? ' (.docx not supported in web mode)' : ''}</div> : null
+          })()}
           <ul className="list">
             {transcriptIds.map((id) => (
               <li key={id} className={id === activeTranscriptId ? 'active' : ''} onClick={() => setActiveTranscriptId(id)}>

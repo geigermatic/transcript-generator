@@ -1,11 +1,9 @@
 import { app, BrowserWindow } from 'electron'
-import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { setupSecurity } from './security'
 import { registerIpcHandlers } from './ipc'
 
-const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
@@ -33,7 +31,9 @@ function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
     webPreferences: {
-      preload: path.join(__dirname, 'preload.mjs'),
+      preload: VITE_DEV_SERVER_URL
+        ? path.join(process.env.APP_ROOT as string, 'electron', 'preload.cjs')
+        : path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
       sandbox: !isDev, // relax sandbox in dev to avoid blank screen issues with Vite
       nodeIntegration: false,
@@ -74,10 +74,12 @@ app.on('activate', () => {
 })
 
 app.whenReady().then(() => {
+  // Register IPC first to avoid race conditions with early renderer invokes
+  registerIpcHandlers(() => win)
+
   createWindow()
   if (win) {
     const devUrl = !app.isPackaged ? (VITE_DEV_SERVER_URL ?? 'http://127.0.0.1:5173') : undefined
     setupSecurity(win!, devUrl)
   }
-  registerIpcHandlers(() => win)
 })
