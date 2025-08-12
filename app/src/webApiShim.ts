@@ -213,13 +213,21 @@ if (typeof window !== 'undefined' && !(window as any).api) {
         }
         const merged = mergeSchemaResults(perChunk)
         emitStatus({ transcriptId, text: 'Generating final markdown summary from merged facts' })
+        // Simple agent grounding: use top keyword excerpts (no embeddings in web shim here)
+        const stop = new Set(['the','a','an','and','or','of','to','in','on','for','with','as','is','are','was','were','be','by','that','this','it','at','from','we','you','they','he','she'])
+        const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean).filter(w => !stop.has(w))
+        const qTokens = new Set(tokenize('summary facts key takeaways topics action items'))
+        const paras = t.text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
+        const scored = paras.map((p, idx) => { const pTokens = new Set(tokenize(p)); let bm=0; for (const tok of qTokens) if (pTokens.has(tok)) bm+=1; return { idx, p, bm } }).sort((a,b)=>b.bm-a.bm)
+        const agentExcerpts = scored.slice(0,5).map(s=>s.p.slice(0,1200))
         emitProgress(90)
         const sys2 = 'You are a precise technical editor.'
         const user2 = [
           'Using the merged facts below (JSON), write a clear, concise markdown summary (3–7 bullets for key takeaways, short intro, optional notes for cautions/contraindications if present). No hallucinations.',
+          (agentExcerpts.length ? ['Grounding excerpts (do not invent beyond these):', ...agentExcerpts].join('\n') : ''),
           'Facts JSON:',
           JSON.stringify(merged),
-        ].join('\n')
+        ].filter(Boolean).join('\n')
         const markdown = await ollamaChat(chosenModel, [ { role: 'system', content: sys2 }, { role: 'user', content: user2 } ], { temperature: 0.2 })
         emitProgress(100)
         return { summaryId: randomId(), merged, markdown }

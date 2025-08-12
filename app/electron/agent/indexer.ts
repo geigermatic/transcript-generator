@@ -31,7 +31,7 @@ export function cosineSim(a: Float32Array, b: Float32Array): number {
   return (na && nb) ? dot / (Math.sqrt(na)*Math.sqrt(nb)) : 0
 }
 
-export function hybridRetrieve(transcriptId: string, query: string, k = 5, embedVec?: number[]) {
+export function hybridRetrieve(transcriptId: string, query: string, k = 10, embedVec?: number[]) {
   const stop = new Set(['the','a','an','and','or','of','to','in','on','for','with','as','is','are','was','were','be','by','that','this','it','at','from','we','you','they','he','she'])
   const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean).filter(w => !stop.has(w))
   const qTokens = new Set(tokenize(query))
@@ -45,7 +45,7 @@ export function hybridRetrieve(transcriptId: string, query: string, k = 5, embed
       const pv = new Float32Array(r.vector.buffer, r.vector.byteOffset, r.vector.length/4)
       sim = cosineSim(pv, qv)
     }
-    const score = 0.4*bm + 0.6*sim
+    const score = 0.6*bm + 0.4*sim
     return { ...r, score }
   })
   scored.sort((a,b) => b.score - a.score)

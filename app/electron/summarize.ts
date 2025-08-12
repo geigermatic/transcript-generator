@@ -103,11 +103,19 @@ export async function runSummarization(input: { transcriptId: string; model?: st
   // Final markdown summary
   const sys2 = 'You are a precise technical editor.'
   hooks?.onStatus?.('Generating final markdown summary from merged facts')
+  let agentExcerpts: string[] = []
+  try {
+    const { hybridRetrieve } = await import('./agent/indexer')
+    const topRows = hybridRetrieve(transcriptId, 'summary facts key takeaways topics action items', 5)
+    agentExcerpts = topRows.map(r => (r as any).text?.slice?.(0, 1200) ?? '')
+    hooks?.onStatus?.(`Agent retrieved ${agentExcerpts.length} excerpt(s) for final summary grounding`)
+  } catch {}
   const user2 = [
     'Using the merged facts below (JSON), write a clear, concise markdown summary (3–7 bullets for key takeaways, short intro, optional notes for cautions/contraindications if present). No hallucinations.',
+    (agentExcerpts.length ? ['Grounding excerpts (do not invent beyond these):', ...agentExcerpts].join('\n') : ''),
     'Facts JSON:',
     JSON.stringify(merged),
-  ].join('\n')
+  ].filter(Boolean).join('\n')
   hooks?.onProgress?.(90)
   const res2 = await ollama.chat({ model: chosenModel, messages: [
     { role: 'system', content: sys2 },
