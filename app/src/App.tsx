@@ -79,10 +79,12 @@ function App() {
     setIsSummarizing(true)
     setProgress(0)
     const off = window.api.summarize.onProgress((v) => setProgress(v))
-    const offStatus = window.api.summarize.onStatus(({ transcriptId, text }) => {
-      if (activeTranscriptId !== transcriptId) return
-      setStatusLines((prev) => [text, ...prev].slice(0, 4))
-    })
+    const offStatus = typeof (window.api.summarize as any).onStatus === 'function'
+      ? (window.api.summarize as any).onStatus(({ transcriptId, text }: { transcriptId: string; text: string }) => {
+          if (activeTranscriptId !== transcriptId) return
+          setStatusLines((prev) => [text, ...prev].slice(0, 4))
+        })
+      : () => {}
     try {
       const res = await window.api.summarize.run({ transcriptId: activeTranscriptId, model })
       setResult(res)
