@@ -92,3 +92,4 @@ venv.bak/
 # Virtual environments
 .venv
 app/release/
+eval/without_qa/
