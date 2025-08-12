@@ -100,6 +100,7 @@ if (typeof window !== 'undefined' && !(window as any).api) {
 
   let progressListeners: Array<(n: number) => void> = []
   let statusListeners: Array<(p: { transcriptId: string; text: string }) => void> = []
+  let agentProgressListeners: Array<(p: { transcriptId: string; done: number; total: number }) => void> = []
   const emitProgress = (n: number) => progressListeners.forEach((cb) => cb(n))
   const emitStatus = (p: { transcriptId: string; text: string }) => statusListeners.forEach((cb) => cb(p))
 
@@ -277,6 +278,70 @@ if (typeof window !== 'undefined' && !(window as any).api) {
         const answer = await ollamaChat(chosenModel, [ { role: 'system', content: sys }, { role: 'user', content: user } ], { temperature: 0.1 })
         return { answer }
       },
+    },
+    agent: {
+      index: async ({ transcriptId, model }: { transcriptId: string; model?: string }) => {
+        const t = transcripts.find((x) => x.id === transcriptId)
+        if (!t) return { ok: false, paragraphs: 0 }
+        const paras = t.text.split(/\n{2,}/).map(s => s.trim()).filter(Boolean)
+        const embedModel = model || 'nomic-embed-text'
+        const vectors: number[][] = []
+        const batchSize = 16
+        for (let i = 0; i < paras.length; i += batchSize) {
+          const batch = paras.slice(i, i + batchSize)
+          try {
+            const res = await fetch('http://127.0.0.1:11434/api/embeddings', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: embedModel, input: batch })
+            })
+            if (res.ok) {
+              const data = await res.json() as any
+              const embs = (data?.embeddings || data?.data || []) as number[][]
+              for (const v of embs) vectors.push(v)
+            }
+          } catch {}
+          agentProgressListeners.forEach(cb => cb({ transcriptId, done: Math.min(i + batch.length, paras.length), total: paras.length }))
+        }
+        // persist in localStorage
+        setLS(`agent.paragraphs.${transcriptId}` as any, paras as any)
+        setLS(`agent.embeddings.${transcriptId}` as any, vectors as any)
+        return { ok: true, paragraphs: paras.length }
+      },
+      onIndexProgress: (cb: (e: { transcriptId: string; done: number; total: number }) => void) => {
+        agentProgressListeners.push(cb)
+        return () => { agentProgressListeners = agentProgressListeners.filter(f => f !== cb) }
+      },
+      chat: async ({ transcriptId, message, model, embedModel }: { transcriptId: string; message: string; model?: string; embedModel?: string }) => {
+        const paras: string[] = getLS(`agent.paragraphs.${transcriptId}` as any, []) as any
+        const embs: number[][] = getLS(`agent.embeddings.${transcriptId}` as any, []) as any
+        const stop = new Set(['the','a','an','and','or','of','to','in','on','for','with','as','is','are','was','were','be','by','that','this','it','at','from','we','you','they','he','she'])
+        const tokenize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean).filter(w => !stop.has(w))
+        const qTokens = new Set(tokenize(message))
+        let qv: number[] | undefined
+        try {
+          const res = await fetch('http://127.0.0.1:11434/api/embeddings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: embedModel || 'nomic-embed-text', input: message }) })
+          if (res.ok) { const data = await res.json() as any; qv = (data?.embeddings?.[0] || data?.data?.[0] || []) as number[] }
+        } catch {}
+        const cosine = (a: number[], b: number[]) => {
+          let dot = 0, na = 0, nb = 0
+          for (let i = 0; i < Math.min(a.length, b.length); i++) { dot += a[i]*b[i]; na += a[i]*a[i]; nb += b[i]*b[i] }
+          return (na && nb) ? dot / (Math.sqrt(na)*Math.sqrt(nb)) : 0
+        }
+        const scored = paras.map((p, idx) => {
+          const pTokens = new Set(tokenize(p))
+          let bm = 0; for (const tok of qTokens) if (pTokens.has(tok)) bm += 1
+          let sim = 0
+          if (qv && embs[idx]) sim = cosine(qv, embs[idx])
+          const score = 0.5*bm + 0.5*sim
+          return { idx, text: p, score }
+        }).sort((a,b) => b.score - a.score)
+        const top = scored.slice(0, 5).map(s => s.text.slice(0, 1200))
+        const sys = 'Answer strictly and only based on the provided transcript excerpts. If the answer is not contained, reply: "I do not know based on the transcript."'
+        const user = ['Relevant transcript excerpts (do not infer beyond these):', ...top.map((t, i) => `Excerpt ${i+1}:\n${t}`), '', `Question: ${message}`].join('\n')
+        const chosenModel = model || (localStorage.getItem('default_model') || 'llama3.1:8b-instruct-q4_K_M')
+        const answer = await ollamaChat(chosenModel, [ { role: 'system', content: sys }, { role: 'user', content: user } ], { temperature: 0.1 })
+        return { answer, retrieved: scored.slice(0, 5).map(s => ({ idx: s.idx, score: s.score })) }
+      }
     },
   }
 }
