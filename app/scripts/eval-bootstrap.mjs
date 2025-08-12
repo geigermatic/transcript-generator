@@ -59,56 +59,84 @@ async function writeTranscript(text, origName) {
 
 async function generateQA(transcriptId, text, num = 5) {
   const sys = 'You are a QA generator.'
-  const user = [
-    'Based on the transcript below, generate concise Q&A pairs that a student might ask and that can be answered from the text. Output STRICT JSON array of objects with fields: question (string), answer (string). Do not include any other text.',
-    `Return exactly ${num} items.`,
-    'Transcript:',
-    text.slice(0, 12000),
-  ].join('\n')
-  const res = await ollama.chat({ model: MODEL, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], stream: false, format: 'json', options: { temperature: 0.2 } })
-  let itemsRaw = []
-  try {
-    const content = res.message?.content ?? '[]'
-    const parsed = JSON.parse(content)
-    if (Array.isArray(parsed)) itemsRaw = parsed
-    else if (parsed && Array.isArray(parsed.items)) itemsRaw = parsed.items
-    else if (parsed && Array.isArray(parsed.qa)) itemsRaw = parsed.qa
-    else if (parsed && Array.isArray(parsed.pairs)) itemsRaw = parsed.pairs
-    else itemsRaw = []
-  } catch (e) {
-    console.warn('QA parse failed; skipping QA generation:', (e?.message || e))
-    itemsRaw = []
+  async function askJson(windowText, k, temperature = 0.2) {
+    const user = [
+      'Based on the transcript below, generate concise Q&A pairs that a student might ask and that can be answered from the text. Output STRICT JSON array of objects with fields: question (string), answer (string). Do not include any other text.',
+      `Return exactly ${k} items.`,
+      'Transcript:',
+      windowText,
+    ].join('\n')
+    const res = await ollama.chat({ model: MODEL, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], stream: false, format: 'json', options: { temperature } })
+    try {
+      const content = res.message?.content ?? '[]'
+      const parsed = JSON.parse(content)
+      if (Array.isArray(parsed)) return parsed
+      if (parsed && Array.isArray(parsed.items)) return parsed.items
+      if (parsed && Array.isArray(parsed.qa)) return parsed.qa
+      if (parsed && Array.isArray(parsed.pairs)) return parsed.pairs
+      return []
+    } catch {
+      return []
+    }
   }
-  const items = (Array.isArray(itemsRaw) ? itemsRaw : []).filter(it => it && typeof it.question === 'string' && typeof it.answer === 'string')
-  let lines = items.slice(0, num).map(it => JSON.stringify({ transcript_id: transcriptId, question: it.question, answer: it.answer }))
-
-  // Fallback: if model didn't return JSON items, ask for line format and parse
-  if (lines.length === 0) {
-    const user2 = [
+  async function askLines(windowText, k, temperature = 0.2) {
+    const user = [
       'Generate Q&A pairs that can be answered strictly from this transcript. Use the format:',
       'Q: <question>\nA: <answer>\n',
-      `Return exactly ${num} pairs. No extra text.`,
+      `Return exactly ${k} pairs. No extra text.`,
       'Transcript:',
-      text.slice(0, 12000),
+      windowText,
     ].join('\n')
-    const res2 = await ollama.chat({ model: MODEL, messages: [ { role: 'system', content: sys }, { role: 'user', content: user2 } ], stream: false, options: { temperature: 0.2 } })
-    const content2 = res2.message?.content ?? ''
+    const res = await ollama.chat({ model: MODEL, messages: [ { role: 'system', content: sys }, { role: 'user', content: user } ], stream: false, options: { temperature } })
+    const content = res.message?.content ?? ''
     const pairs = []
     const regex = /Q:\s*(.+?)\s*A:\s*(.+?)(?:\n\n|$)/gs
     let m
-    while ((m = regex.exec(content2)) && pairs.length < num) {
+    while ((m = regex.exec(content)) && pairs.length < k) {
       const q = m[1]?.trim()
       const a = m[2]?.trim()
       if (q && a) pairs.push({ question: q, answer: a })
     }
-    lines = pairs.map(it => JSON.stringify({ transcript_id: transcriptId, question: it.question, answer: it.answer }))
+    return pairs
   }
 
-  if (lines.length === 0) {
+  function uniqueByQuestion(arr) {
+    const seen = new Set()
+    const out = []
+    for (const it of arr) {
+      const qn = (it.question || '').toLowerCase().trim()
+      if (!qn || seen.has(qn)) continue
+      seen.add(qn)
+      out.push(it)
+    }
+    return out
+  }
+
+  // Attempt full-text JSON then lines
+  let collected = []
+  const full = text.slice(0, 16000)
+  collected = uniqueByQuestion([...(await askJson(full, num, 0.2)), ...(await askLines(full, num, 0.2))])
+
+  // Windowed fallback if needed: start/middle/end
+  if (collected.length < num) {
+    const N = text.length
+    const win = Math.min(8000, Math.ceil(N / 3))
+    const starts = [0, Math.max(0, Math.floor(N / 2) - Math.floor(win / 2)), Math.max(0, N - win)]
+    for (const s of starts) {
+      if (collected.length >= num) break
+      const windowText = text.slice(s, s + win)
+      const need = num - collected.length
+      const add = uniqueByQuestion([...(await askJson(windowText, need, 0.25)), ...(await askLines(windowText, need, 0.3))])
+      collected = uniqueByQuestion([...collected, ...add])
+    }
+  }
+
+  if (collected.length === 0) {
     console.warn(`No QA generated for ${transcriptId}; continuing without QA entries.`)
     return
   }
-  if (lines.length) await fsp.appendFile(QA_FILE, lines.join('\n') + '\n', 'utf8')
+  const lines = collected.slice(0, num).map(it => JSON.stringify({ transcript_id: transcriptId, question: it.question, answer: it.answer }))
+  await fsp.appendFile(QA_FILE, lines.join('\n') + '\n', 'utf8')
 }
 
 async function run() {
