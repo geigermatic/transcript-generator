@@ -14,7 +14,12 @@ contextBridge.exposeInMainWorld('api', {
       const listener = (_e: any, value: number) => cb(value)
       ipcRenderer.on('summarize.progress', listener)
       return () => ipcRenderer.off('summarize.progress', listener)
-    }
+    },
+    onStatus: (cb: (payload: { transcriptId: string; text: string }) => void) => {
+      const listener = (_e: any, payload: any) => cb(payload)
+      ipcRenderer.on('summarize.status', listener)
+      return () => ipcRenderer.off('summarize.status', listener)
+    },
   },
   glossary: {
     list: () => ipcRenderer.invoke('glossary.list'),
@@ -41,6 +46,11 @@ contextBridge.exposeInMainWorld('api', {
   },
   agent: {
     index: (params: { transcriptId: string; model?: string }) => ipcRenderer.invoke('agent.index', params) as Promise<{ ok: boolean; paragraphs: number }>,
+    onIndexProgress: (cb: (e: { transcriptId: string; done: number; total: number }) => void) => {
+      const listener = (_e: any, payload: any) => cb(payload)
+      ipcRenderer.on('agent.index.progress', listener)
+      return () => ipcRenderer.off('agent.index.progress', listener)
+    },
     chat: (params: { transcriptId: string; message: string; model?: string; embedModel?: string }) => ipcRenderer.invoke('agent.chat', params) as Promise<{ answer: string; retrieved: Array<{ idx: number; score: number }> }>,
   },
   ab: {

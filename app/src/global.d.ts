@@ -10,6 +10,7 @@ declare global {
       summarize: {
         run: (params: { transcriptId: string; model?: string }) => Promise<{ summaryId: string; merged: any; markdown: string }>
         onProgress: (cb: (value: number) => void) => () => void
+        onStatus: (cb: (payload: { transcriptId: string; text: string }) => void) => () => void
       }
       glossary: {
         list: () => Promise<any>
@@ -36,6 +37,7 @@ declare global {
       }
       agent: {
         index: (params: { transcriptId: string; model?: string }) => Promise<{ ok: boolean; paragraphs: number }>
+        onIndexProgress: (cb: (e: { transcriptId: string; done: number; total: number }) => void) => () => void
         chat: (params: { transcriptId: string; message: string; model?: string; embedModel?: string }) => Promise<{ answer: string; retrieved: Array<{ idx: number; score: number }> }>
       }
       ab: {

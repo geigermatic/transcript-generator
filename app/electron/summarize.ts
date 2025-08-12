@@ -31,7 +31,7 @@ type SchemaType = {
   timestamp_refs?: string[]
 }
 
-export async function runSummarization(input: { transcriptId: string; model?: string }, hooks?: { onProgress?: (value: number) => void }) {
+export async function runSummarization(input: { transcriptId: string; model?: string }, hooks?: { onProgress?: (value: number) => void, onStatus?: (text: string) => void }) {
   const { transcriptId, model } = input
   const transcript = getTranscript(transcriptId)
   if (!transcript) throw new Error('Transcript not found')
@@ -43,9 +43,11 @@ export async function runSummarization(input: { transcriptId: string; model?: st
   const examples = examplesAll.slice(0, 2).map(e => ({ ...e, excerpt: e.excerpt.slice(0, 1000) }))
 
   const chosenModel = model ?? 'llama3.1:8b-instruct-q4_K_M'
+  hooks?.onStatus?.(`Model: ${chosenModel}`)
 
   const encodedLengthFn = await resolveTokenCounter(chosenModel)
   const chunks = chunkByToken(transcript.text, 1200, encodedLengthFn)
+  hooks?.onStatus?.(`Chunking transcript into ${chunks.length} segment(s) ~1200 tokens each`)
 
   // Per-chunk JSON extraction
   const perChunkResults: SchemaType[] = []
@@ -56,6 +58,7 @@ export async function runSummarization(input: { transcriptId: string; model?: st
     // Log to terminal (Electron main process)
     console.log(`[summarize] chunk ${index}/${total} starting (${Math.min(chunk.length, 80)} chars preview: ${chunk.slice(0, 80).replace(/\n/g, ' ')}...)`)
     const sys = 'You are an offline summarizer. Output STRICT JSON only that matches the given JSON Schema.'
+    hooks?.onStatus?.(`Extracting JSON from chunk ${index + 1}/${total}`)
     const user = [
       'Verified glossary (authoritative terms and definitions):',
       JSON.stringify(glossary),
@@ -99,6 +102,7 @@ export async function runSummarization(input: { transcriptId: string; model?: st
 
   // Final markdown summary
   const sys2 = 'You are a precise technical editor.'
+  hooks?.onStatus?.('Generating final markdown summary from merged facts')
   const user2 = [
     'Using the merged facts below (JSON), write a clear, concise markdown summary (3–7 bullets for key takeaways, short intro, optional notes for cautions/contraindications if present). No hallucinations.',
     'Facts JSON:',

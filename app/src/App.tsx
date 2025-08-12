@@ -21,6 +21,7 @@ function App() {
   const [chatAnswer, setChatAnswer] = useState('')
   const [agentChat, setAgentChat] = useState(false)
   const [agentRetrieved, setAgentRetrieved] = useState<Array<{ idx: number; score: number }>>([])
+  const [statusLines, setStatusLines] = useState<string[]>([])
   const dropRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -78,11 +79,16 @@ function App() {
     setIsSummarizing(true)
     setProgress(0)
     const off = window.api.summarize.onProgress((v) => setProgress(v))
+    const offStatus = window.api.summarize.onStatus(({ transcriptId, text }) => {
+      if (activeTranscriptId !== transcriptId) return
+      setStatusLines((prev) => [text, ...prev].slice(0, 4))
+    })
     try {
       const res = await window.api.summarize.run({ transcriptId: activeTranscriptId, model })
       setResult(res)
     } finally {
       off()
+      offStatus()
       setIsSummarizing(false)
       setTimeout(() => setProgress(0), 800)
     }
@@ -156,6 +162,11 @@ function App() {
           <button className="primary" disabled={!activeTranscriptId || isSummarizing} onClick={onSummarize}>Summarize</button>
           {isSummarizing && (
             <div className="progress"><div className="bar" style={{ width: `${progress}%` }} /></div>
+          )}
+          {isSummarizing && statusLines.length > 0 && (
+            <div className="small" style={{ marginTop: 6 }}>
+              {statusLines.map((s, i) => (<div key={i}>• {s}</div>))}
+            </div>
           )}
 
           <div className="section">

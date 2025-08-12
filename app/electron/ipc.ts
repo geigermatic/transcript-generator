@@ -39,7 +39,10 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null) {
     const onProgress = (value: number) => {
       win?.webContents.send('summarize.progress', value)
     }
-    return runSummarization({ transcriptId, model }, { onProgress })
+    const onStatus = (text: string) => {
+      win?.webContents.send('summarize.status', { transcriptId, text })
+    }
+    return runSummarization({ transcriptId, model }, { onProgress, onStatus })
   })
 
   ipcMain.handle('privacy.status', async () => {
@@ -140,7 +143,12 @@ export function registerIpcHandlers(getWin: () => BrowserWindow | null) {
     if (!t) return { ok: false }
     const { splitParagraphs, embedParagraphs } = await import('./agent/indexer')
     const paras = await splitParagraphs(transcriptId, t.text)
-    await embedParagraphs(transcriptId, paras, model || 'nomic-embed-text')
+    let done = 0
+    await embedParagraphs(transcriptId, paras, model || 'nomic-embed-text', (d, total) => {
+      done = d
+      const win = getWin()
+      win?.webContents.send('agent.index.progress', { transcriptId, done, total })
+    })
     return { ok: true, paragraphs: paras.length }
   })
 

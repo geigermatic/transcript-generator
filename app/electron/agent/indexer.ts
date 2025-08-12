@@ -10,15 +10,18 @@ export async function splitParagraphs(transcriptId: string, text: string): Promi
   return paragraphs
 }
 
-export async function embedParagraphs(transcriptId: string, paragraphs: string[], model = 'nomic-embed-text') {
+export async function embedParagraphs(transcriptId: string, paragraphs: string[], model = 'nomic-embed-text', onProgress?: (done: number, total: number) => void) {
   const del = db().prepare("DELETE FROM embeddings_agent WHERE kind = 'paragraph' AND ref_id IN (SELECT id FROM agent_paragraphs WHERE transcript_id = ?)")
   del.run(transcriptId)
   const select = db().prepare('SELECT id, text FROM agent_paragraphs WHERE transcript_id = ? ORDER BY idx ASC')
   const rows = select.all(transcriptId) as Array<{ id: string; text: string }>
+  let i = 0
   for (const row of rows) {
     const res = await ollama.embed({ model, input: row.text }) as any
     const vec = (res?.embeddings?.[0] || res?.embedding || []) as number[]
     db().prepare('INSERT INTO embeddings_agent(id, kind, ref_id, vector) VALUES (?, ?, ?, ?)').run(randomId(), 'paragraph', row.id, Buffer.from(new Float32Array(vec).buffer))
+    i += 1
+    onProgress?.(i, rows.length)
   }
 }
 
