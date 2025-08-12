@@ -1,9 +1,11 @@
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import ollama from 'ollama'
 import mammoth from 'mammoth'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(__dirname, '..', '..')
 const EVAL_DIR = path.join(REPO_ROOT, 'eval')
 const TRANSCRIPTS_DIR = path.join(EVAL_DIR, 'transcripts')
