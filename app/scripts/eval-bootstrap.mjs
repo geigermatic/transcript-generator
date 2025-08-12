@@ -80,7 +80,34 @@ async function generateQA(transcriptId, text, num = 5) {
     itemsRaw = []
   }
   const items = (Array.isArray(itemsRaw) ? itemsRaw : []).filter(it => it && typeof it.question === 'string' && typeof it.answer === 'string')
-  const lines = items.slice(0, num).map(it => JSON.stringify({ transcript_id: transcriptId, question: it.question, answer: it.answer }))
+  let lines = items.slice(0, num).map(it => JSON.stringify({ transcript_id: transcriptId, question: it.question, answer: it.answer }))
+
+  // Fallback: if model didn't return JSON items, ask for line format and parse
+  if (lines.length === 0) {
+    const user2 = [
+      'Generate Q&A pairs that can be answered strictly from this transcript. Use the format:',
+      'Q: <question>\nA: <answer>\n',
+      `Return exactly ${num} pairs. No extra text.`,
+      'Transcript:',
+      text.slice(0, 12000),
+    ].join('\n')
+    const res2 = await ollama.chat({ model: MODEL, messages: [ { role: 'system', content: sys }, { role: 'user', content: user2 } ], stream: false, options: { temperature: 0.2 } })
+    const content2 = res2.message?.content ?? ''
+    const pairs = []
+    const regex = /Q:\s*(.+?)\s*A:\s*(.+?)(?:\n\n|$)/gs
+    let m
+    while ((m = regex.exec(content2)) && pairs.length < num) {
+      const q = m[1]?.trim()
+      const a = m[2]?.trim()
+      if (q && a) pairs.push({ question: q, answer: a })
+    }
+    lines = pairs.map(it => JSON.stringify({ transcript_id: transcriptId, question: it.question, answer: it.answer }))
+  }
+
+  if (lines.length === 0) {
+    console.warn(`No QA generated for ${transcriptId}; continuing without QA entries.`)
+    return
+  }
   if (lines.length) await fsp.appendFile(QA_FILE, lines.join('\n') + '\n', 'utf8')
 }
 
