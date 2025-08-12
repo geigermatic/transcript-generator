@@ -12,6 +12,8 @@ const QA_FILE = path.join(EVAL_DIR, 'qa.jsonl')
 const OUTPUT_FILE = path.join(EVAL_DIR, 'baseline.json')
 
 const MODEL = process.env.OLLAMA_MODEL || 'llama3.1:8b-instruct-q4_K_M'
+const ARGS = process.argv.slice(2)
+const VERBOSE = ARGS.includes('--verbose') || process.env.BASELINE_VERBOSE === '1'
 
 const SchemaJson = {
   type: 'object',
@@ -53,12 +55,13 @@ function chunkByToken(text, targetTokens = 1200) {
   return chunks
 }
 
-async function extractJsonPerChunk(text) {
+async function extractJsonPerChunk(text, verbose = false) {
   const chunks = chunkByToken(text)
   const perChunk = []
   const diagnostics = []
   for (let i = 0; i < chunks.length; i += 1) {
     const chunk = chunks[i]
+    if (verbose) console.log(`[baseline] extract chunk ${i + 1}/${chunks.length} (chars: ${chunk.length})`)
     const sys = 'You are an offline summarizer. Output STRICT JSON only that matches the given JSON Schema.'
     const user = [
       'Verified glossary (authoritative terms and definitions):',
@@ -82,9 +85,11 @@ async function extractJsonPerChunk(text) {
       const parsed = JSON.parse(content)
       perChunk.push(parsed)
       diagnostics.push({ chunk: i+1, ok: true, keys: Object.keys(parsed) })
+      if (verbose) console.log(`[baseline] ✓ chunk ${i + 1}: keys=${Object.keys(parsed).join(',')}`)
     } catch (e) {
       perChunk.push({ key_takeaways: [], topics: [] })
       diagnostics.push({ chunk: i+1, ok: false, error: String(e).slice(0, 160) })
+      if (verbose) console.warn(`[baseline] ✗ chunk ${i + 1}: parse failed (${String(e).slice(0,80)})`)
     }
   }
   return { perChunk, diagnostics }
@@ -166,16 +171,23 @@ async function run() {
   const qa = fs.existsSync(QA_FILE) ? (await fsp.readFile(QA_FILE, 'utf8')).split(/\n/).filter(Boolean).map(line => JSON.parse(line)) : []
   const results = { model: MODEL, transcripts: [] }
 
+  console.log(`[baseline] Found ${files.length} transcript(s)`)
+  let idx = 0
   for (const file of files) {
+    idx += 1
     const transcriptId = path.basename(file)
     const text = await fsp.readFile(path.join(TRANSCRIPTS_DIR, file), 'utf8')
+    console.log(`[baseline] (${idx}/${files.length}) Start ${transcriptId}`)
     const t0 = Date.now()
-    const { perChunk, diagnostics } = await extractJsonPerChunk(text)
+    const { perChunk, diagnostics } = await extractJsonPerChunk(text, VERBOSE)
     const merged = mergeSchemaResults(perChunk)
     const prose = await finalProse(merged)
     const t1 = Date.now()
     const val = jsonValidityAndCoverage(merged)
     const numValidChunks = diagnostics.filter(d => d.ok).length
+    const numChunks = perChunk.length
+    const numFailed = numChunks - numValidChunks
+    console.log(`[baseline] (${idx}/${files.length}) Extracted ${numChunks} chunks (ok=${numValidChunks}, failed=${numFailed}); time=${t1 - t0}ms`)
     const summary = {
       transcriptId,
       timeMs: t1 - t0,
@@ -190,6 +202,7 @@ async function run() {
 
     // Q&A eval
     const qas = qa.filter(q => q.transcript_id === transcriptId)
+    console.log(`[baseline] (${idx}/${files.length}) QA pairs: ${qas.length}`)
     const paragraphs = splitParagraphs(text)
     const stop = new Set(['the','a','an','and','or','of','to','in','on','for','with','as','is','are','was','were','be','by','that','this','it','at','from','we','you','they','he','she'])
     const tokenize = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean).filter(w => !stop.has(w))
@@ -209,15 +222,18 @@ async function run() {
     }
     const qaOut = []
     for (const item of qas) {
+      if (VERBOSE) console.log(`[baseline] QA: ${item.question.slice(0, 80)}...`)
       const tQ = Date.now()
       const pred = await ask(item.question)
       const tA = Date.now()
       const em = normalize(pred) === normalize(item.answer)
       const f1s = f1(pred, item.answer)
       qaOut.push({ question: item.question, gold: item.answer, pred, timeMs: tA - tQ, EM: em, F1: Number(f1s.toFixed(3)), unanswerable: !!item.unanswerable })
+      if (VERBOSE) console.log(`[baseline] QA done in ${tA - tQ}ms (EM=${em}, F1=${Number(f1s.toFixed(3))})`)
     }
     summary.qa = qaOut
     results.transcripts.push(summary)
+    console.log(`[baseline] (${idx}/${files.length}) Done ${transcriptId} in ${t1 - t0}ms`)
   }
 
   await fsp.mkdir(EVAL_DIR, { recursive: true })
